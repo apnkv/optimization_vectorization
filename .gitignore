@@ -2,3 +2,5 @@
 .1svgfile1.svg
 .idea/
 OT.png
+
+**/*.pyc
