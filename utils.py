@@ -1,10 +1,10 @@
-import numpy as np
-import tempfile
-import cairo
-import PIL
 import abc
 import os
+import tempfile
 
+import PIL
+import cairo
+import numpy as np
 from PIL import Image, ImageOps
 
 

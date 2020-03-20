@@ -15,10 +15,12 @@ DEFAULT_RENDERER = Renderer((64, 64),
 def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50,
                         optimize_width=True, lr=0.2, loss=DEFAULT_LOSS, coord_only_steps=None,
                         renderer=DEFAULT_RENDERER, length_loss=0., width_loss=0., width_lr=0.1,
-                        image=None, mse=0., return_batches_by_step=False):
+                        image=None, mse=0., return_batches_by_step=False, grads=None):
 
     mse_loss = torch.nn.MSELoss()
     batches_by_step = [line_batch.detach().cpu()] if return_batches_by_step else []
+    if grads is not None:
+        grads.append(torch.zeros_like(line_batch).detach().cpu())
 
     if image is not None:
         image = torch.from_numpy(image).to(line_batch.get_device())
@@ -58,6 +60,9 @@ def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50,
         sample_loss += mse_part
 
         sample_loss.backward()
+
+        if grads is not None:
+            grads.append(line_batch.grad.data.detach().cpu())
 
         g_line_batch = line_batch.grad.data
         if not optimize_width:
