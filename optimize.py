@@ -1,7 +1,7 @@
 import torch
 
 from geomloss import SamplesLoss
-from differentiable_rendering.sigmoids_renderer.renderer import Renderer
+from contrib.differentiable_rendering.sigmoids_renderer.renderer import Renderer
 
 
 DEFAULT_DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -15,9 +15,11 @@ DEFAULT_RENDERER = Renderer((64, 64),
 def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50,
                         optimize_width=True, lr=0.2, loss=DEFAULT_LOSS, coord_only_steps=None,
                         renderer=DEFAULT_RENDERER, length_loss=0., width_loss=0., width_lr=0.1,
-                        image=None, mse=0., return_batches_by_step=False, grads=None):
+                        image=None, mse=0., bce=0., ot=1., return_batches_by_step=False, grads=None):
 
     mse_loss = torch.nn.MSELoss()
+    bce_loss = torch.nn.BCELoss()
+
     batches_by_step = [line_batch.detach().cpu()] if return_batches_by_step else []
     if grads is not None:
         grads.append(torch.zeros_like(line_batch).detach().cpu())
@@ -36,9 +38,13 @@ def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50,
         vector_masses = renderer.render(line_batch)[0]
 
         if image is not None and mse > 0.:
-            mse_part = mse * mse_loss(image.T, vector_masses)
+            mse_part = mse * mse_loss(vector_masses, image)
         else:
             mse_part = 0.
+        if image is not None and bce > 0.:
+            bce_part = bce * bce_loss(vector_masses, image)
+        else:
+            bce_part = 0.
 
         vector_coords = vector_masses.nonzero().float()
         vector_masses = vector_masses.reshape(-1)
@@ -48,7 +54,7 @@ def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50,
         if line_batch.grad is not None:
             line_batch.grad.data.zero_()
 
-        sample_loss = loss(vector_masses, vector_coords, raster_masses, raster_coords)
+        sample_loss = ot * loss(vector_masses, vector_coords, raster_masses, raster_coords)
         if length_loss > 0.:
             sample_loss += length_loss * torch.mean(
                 initial_length - torch.sqrt((line_batch[:, :, 0] - line_batch[:, :, 2]) ** 2
@@ -58,6 +64,7 @@ def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50,
             sample_loss += width_loss * torch.mean((line_batch[:, :, 4] - initial_width) ** 2)
 
         sample_loss += mse_part
+        sample_loss += bce_part
 
         sample_loss.backward()
 
