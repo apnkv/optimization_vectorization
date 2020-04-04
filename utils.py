@@ -4,6 +4,7 @@ import tempfile
 
 import PIL
 import cairo
+import torch
 import numpy as np
 from PIL import Image, ImageOps
 
@@ -168,3 +169,34 @@ class LinePerturbationPipe(LinePerturbation):
         for step in self._steps:
             new_lines = step.transform(new_lines)
         return new_lines
+
+    
+def compute_pixel_coords(image):
+    return np.argwhere(image)
+
+
+def compute_pixel_density(image):
+    pixel_density = image[np.nonzero(image)]
+    pixel_density /= np.sum(pixel_density)
+    return pixel_density
+
+
+def get_pixel_coords_and_density(image, device='cuda'):
+    pixel_coords = compute_pixel_coords(image)
+    pixel_density = compute_pixel_density(image)
+
+    torch_pixel_coords = torch.from_numpy(pixel_coords.astype(np.float32)).to(device)
+    torch_pixel_density = torch.from_numpy(pixel_density.astype(np.float32)).to(device)
+
+    return torch_pixel_coords, torch_pixel_density
+
+
+def wrap_lines_into_numpy_batch(lines):
+    for line in lines:
+        line.append(0.5)
+    lines = np.array([lines], dtype=np.float32)
+    return lines
+
+
+def torch_to_synthetic_lines(patch_lines):
+    return patch_lines.numpy()[:, :5]

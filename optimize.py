@@ -18,7 +18,7 @@ def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50,
                         image=None, mse=0., bce=0., ot=1., return_batches_by_step=False, grads=None):
 
     mse_loss = torch.nn.MSELoss()
-    bce_loss = torch.nn.BCELoss()
+    bce_loss = torch.nn.BCEWithLogitsLoss()
 
     batches_by_step = [line_batch.detach().cpu()] if return_batches_by_step else []
     if grads is not None:
