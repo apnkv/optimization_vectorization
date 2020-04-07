@@ -75,10 +75,10 @@ class SyntheticPatch:
         self._ctx.restore()
         self._ctx.move_to(0, 0)
 
-    def get_image(self, invert=False):
-        self._ctx.set_operator(cairo.OPERATOR_MULTIPLY)
+    def get_image(self, invert=False, compositing_operator=cairo.OPERATOR_MULTIPLY):
+        self._ctx.set_operator(compositing_operator)
 
-        _, temp_filename = tempfile.mkstemp()
+        fd, temp_filename = tempfile.mkstemp()
 
         self._surface.write_to_png(temp_filename)
         self._surface.flush()
@@ -87,6 +87,7 @@ class SyntheticPatch:
 
         image = temp_image.copy() if not invert else PIL.ImageOps.invert(temp_image)
 
+        os.close(fd)
         temp_image.close()
         os.remove(temp_filename)
 
