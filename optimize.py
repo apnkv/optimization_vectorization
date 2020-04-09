@@ -12,7 +12,7 @@ DEFAULT_RENDERER = Renderer((64, 64),
                             dtype=torch.float32)
 
 
-def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50,
+def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50, sinkhorn_steps=50,
                         optimize_width=True, lr=0.2, loss=DEFAULT_LOSS, coord_only_steps=None, bce_image=None,
                         renderer=DEFAULT_RENDERER, length_loss=0., width_loss=0., width_lr=0.1, pos_weight=1.,
                         image=None, mse=0., bce=0., ot=1., return_batches_by_step=False, grads=None):
@@ -55,7 +55,9 @@ def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50,
             line_batch.grad.data.zero_()
 
         sample_loss = ot * loss(vector_masses, vector_coords, raster_masses, raster_coords)
-        # print(sample_loss.item(), bce_part.item(), mse_part.item())
+        if step >= sinkhorn_steps:
+            sample_loss *= 0.
+
         if length_loss > 0.:
             sample_loss += length_loss * torch.mean(
                 initial_length - torch.sqrt((line_batch[:, :, 0] - line_batch[:, :, 2]) ** 2
