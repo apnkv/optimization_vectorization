@@ -15,10 +15,11 @@ DEFAULT_RENDERER = Renderer((64, 64),
 def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50, sinkhorn_steps=50,
                         optimize_width=True, lr=0.2, loss=DEFAULT_LOSS, coord_only_steps=None, bce_image=None,
                         renderer=DEFAULT_RENDERER, length_loss=0., width_loss=0., width_lr=0.1, pos_weight=1.,
-                        image=None, mse=0., bce=0., ot=1., return_batches_by_step=False, grads=None):
+                        image=None, mse=0., bce=0., ot=1., l1=0., return_batches_by_step=False, grads=None):
 
     mse_loss = torch.nn.MSELoss()
     bce_loss = torch.nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([pos_weight]).to(line_batch.get_device()))
+    l1_loss = torch.nn.L1Loss()
 
     batches_by_step = [line_batch.detach().cpu()] if return_batches_by_step else []
     if grads is not None:
@@ -38,13 +39,17 @@ def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50, si
         vector_masses = renderer.render(line_batch)[0]
 
         if image is not None and mse > 0.:
-            mse_part = mse * mse_loss(vector_masses, image)
+            mse_part = mse * mse_loss(vector_masses / vector_masses.sum(), image)
         else:
             mse_part = 0.
         if image is not None and bce > 0.:
-            bce_part = bce * bce_loss(vector_masses, image)
+            bce_part = bce * bce_loss(vector_masses / vector_masses.sum(), image)
         else:
             bce_part = 0.
+        if image is not None and l1 > 0.:
+            l1_part = l1 * l1_loss(vector_masses / vector_masses.sum(), image)
+        else:
+            l1_part = 0.
 
         vector_coords = vector_masses.nonzero().float()
         vector_masses = vector_masses.reshape(-1)
@@ -68,6 +73,7 @@ def optimize_line_batch(line_batch, raster_coords, raster_masses, n_iters=50, si
 
         sample_loss += mse_part
         sample_loss += bce_part
+        sample_loss += l1_part
 
         sample_loss.backward()
 

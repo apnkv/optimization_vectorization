@@ -124,11 +124,10 @@ class LinePerturbation(abc.ABC):
 
 
 class LineRandomShift(LinePerturbation):
-    def __init__(self, endpoint_shift_range, width_shift_range, random_seed=None):
+    def __init__(self, endpoint_shift_range, width_shift_range):
         super(LineRandomShift, self).__init__()
         self._endpoint_shift_range = endpoint_shift_range
         self._width_shift_range = width_shift_range
-        np.random.seed(random_seed)
 
     def transform(self, lines):
         new_lines = [list(line) for line in lines]
