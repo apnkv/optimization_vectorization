@@ -65,7 +65,7 @@ class StatefulAligner:
     def set_step_function(self, fn):
         self.step_function = fn
 
-    def add_after_step_callback(self, fn):
+    def add_callback(self, fn):
         self.callbacks.append(fn)
 
 
@@ -119,26 +119,29 @@ def make_default_loss_fn(ot_schedule=None, bce_schedule=None):
     return compute_loss
 
 
-def make_default_optimize_fn(aligner):
-    optimizer = optim.Adam((aligner.get_line_batch(),), lr=0.5)
+def strip_confidence_grads(state):
+    if state['current_line_batch'].grad is not None:
+        state['current_line_batch'].grad.data[:, :, 5] = 0.
+
+
+def make_default_optimize_fn(aligner, lr=0.5, transform_grads=None):
+    optimizer = optim.Adam((aligner.get_line_batch(),), lr=lr)
+    transform_grads = transform_grads or strip_confidence_grads
 
     def optimize_fn(state):
         optimizer.zero_grad()
         state['loss_value'].backward()
-        if state['current_line_batch'].grad is not None:
-            state['current_line_batch'].grad.data[:, :, 5] = 0.
+        transform_grads(state)
         optimizer.step()
 
     return optimize_fn
 
 
-def make_simple_aligner(line_batch: torch.Tensor,
-                        image: np.ndarray,
-                        loss_fn: Callable[[dict], torch.Tensor] = None,
-                        optimize_fn: Callable[[dict], None] = None,
-                        callbacks: Optional[List[Callable]] = None,
-                        device: str = DEFAULT_DEVICE) -> StatefulAligner:
-    aligner = StatefulAligner(line_batch, image)
+def init_ot_aligner(aligner: StatefulAligner,
+                    loss_fn: Callable[[dict], torch.Tensor] = None,
+                    optimize_fn: Callable[[dict], None] = None,
+                    callbacks: Optional[List[Callable]] = None,
+                    device: str = DEFAULT_DEVICE) -> StatefulAligner:
 
     loss_fn = loss_fn or make_default_loss_fn()
     optimize_fn = optimize_fn or make_default_optimize_fn(aligner)
@@ -151,7 +154,8 @@ def make_simple_aligner(line_batch: torch.Tensor,
         calls loss and optimizer callbacks.
         """
         vector_masses = renderer.render(state['current_line_batch'])[0]
-        state['render'] = vector_masses.clone().detach()
+        state['render'] = vector_masses.clone()
+        # state['render'].requires_grad_(False)
         vector_masses /= vector_masses.sum()
 
         vector_coords = vector_masses.nonzero().float()
@@ -170,6 +174,6 @@ def make_simple_aligner(line_batch: torch.Tensor,
 
     aligner.set_step_function(step_fn)
     for callback in callbacks:
-        aligner.add_after_step_callback(callback)
+        aligner.add_callback(callback)
 
     return aligner

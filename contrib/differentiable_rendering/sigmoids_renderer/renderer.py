@@ -1,13 +1,13 @@
 import torch
 from torch.nn import Parameter
 
-from ..base_renderer import BaseRenderer
 from .bezier import get_associated_coordinates_bezier
 from .line import get_associated_coordinates_line
+from ..base_renderer import BaseRenderer
 
 
 def unsqueeze_right(tensor, ndim):
-    return tensor.reshape(*tensor.shape, *[1]*(ndim - tensor.ndim))
+    return tensor.reshape(*tensor.shape, *[1] * (ndim - tensor.ndim))
 
 
 def broadcast_right_tensors_no_expand(*tensors):
