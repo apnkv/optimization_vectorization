@@ -107,8 +107,8 @@ def save_best_batch(state):
         state['best_batch'] = state['current_line_batch'].clone().detach()
 
 
-def make_default_loss_fn(ot_schedule=None, bce_schedule=None):
-    ot_loss = SamplesLoss("sinkhorn", p=2, blur=.05)
+def make_default_loss_fn(ot_schedule=None, bce_schedule=None, ot_loss=None):
+    ot_loss = ot_loss or SamplesLoss("sinkhorn", p=2, blur=.05)
     bce_loss = torch.nn.BCEWithLogitsLoss()
 
     ot_schedule = ot_schedule or (lambda state: 1.0)
