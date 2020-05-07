@@ -94,7 +94,7 @@ class LossComposition:
 
 
 def store_render_difference(state):
-    state['difference'] = state['render'] - state['raster']
+    state['difference'] = torch.abs(state['render'] - state['raster'])
 
 
 def store_grads(state):
