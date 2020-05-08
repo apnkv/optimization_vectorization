@@ -65,8 +65,6 @@ class CrossingRefinerFull(nn.Module):
         self.conv5 = conv_bn_relu(8, 4, 5, 2)
         self.conv6 = conv_bn_relu(8, 1, 5, 2)
 
-        self.maxpool = nn.Identity()
-
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
                 nn.init.xavier_normal_(m.weight)
@@ -78,12 +76,19 @@ class CrossingRefinerFull(nn.Module):
     def forward(self, x):
         scaling_channels = self.downscaling_branch(x)
 
-        x = self.maxpool(self.conv1(x))
-        x = self.maxpool(self.conv2(x))
-        x = self.maxpool(self.conv3(x))
-        x = self.maxpool(self.conv4(x))
-        x = self.maxpool(self.conv5(x))
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
+        x = self.conv5(x)
         x = torch.cat((x, scaling_channels), dim=1)
-        x = self.maxpool(self.conv6(x))
+        x = self.conv6(x)
+
+        return x
+
+    def apply_convolutions(self, x, n_convolutions=2):
+        convolutions = [self.conv1, self.conv2, self.conv3, self.conv4, self.conv5, self.conv6]
+        for conv in convolutions[:n_convolutions]:
+            x = conv(x)
 
         return x
