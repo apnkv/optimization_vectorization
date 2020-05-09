@@ -139,6 +139,19 @@ class LineRandomShift(LinePerturbation):
         return new_lines
 
 
+class LineBatchRandomShift(LinePerturbation):
+    def __init__(self, endpoint_shift_range, width_shift_range):
+        super(LineBatchRandomShift, self).__init__()
+        self._endpoint_shift_range = endpoint_shift_range
+        self._width_shift_range = width_shift_range
+
+    def transform(self, lines):
+        new_lines = lines.clone()
+        new_lines[:, :, :4] += torch.randint(*self._endpoint_shift_range, [new_lines.shape[0], new_lines.shape[1], 4])
+        new_lines[:, :, 4] = torch.clamp_min(new_lines[:, :, 4] + torch.randint(*self._width_shift_range, [new_lines.shape[0], new_lines.shape[1]]), 1.)
+        return new_lines
+
+
 class LineClip(LinePerturbation):
     def __init__(self, x_lo, x_hi, y_lo, y_hi):
         super(LineClip, self).__init__()
@@ -165,7 +178,7 @@ class LinePerturbationPipe(LinePerturbation):
         self._steps = steps
 
     def transform(self, lines):
-        new_lines = lines.copy()
+        new_lines = lines.clone() if isinstance(lines, torch.Tensor) else lines.copy()
         for step in self._steps:
             new_lines = step.transform(new_lines)
         return new_lines
@@ -189,6 +202,39 @@ def get_pixel_coords_and_density(image, device='cuda'):
     torch_pixel_density = torch.from_numpy(pixel_density.astype(np.float32)).to(device)
 
     return torch_pixel_coords, torch_pixel_density
+
+
+def get_pixel_coords_and_density_batch(images, eps=1e-6):
+    batch_size = images.shape[0]
+    device = images.device
+
+    nonzero_mask = images > eps
+    nonzero_coords = torch.nonzero(nonzero_mask)
+    render_n = nonzero_coords[:, 0]
+    rc = nonzero_coords[:, 1:].type(torch.float32)
+
+    n_nonzero_coords = nonzero_mask.sum(axis=(1, 2))
+    n_coords = n_nonzero_coords.max().item()
+
+    indices = torch.zeros(n_nonzero_coords.sum().item(), dtype=torch.int64, device=device)
+    last = 0
+    for elem in n_nonzero_coords:
+        idx_range = torch.arange(elem.item(), device=device)
+        length = idx_range.shape[0]
+        indices[last:(last + length)] = idx_range
+        last += length
+
+    coords = torch.zeros(batch_size, n_coords, 2, dtype=torch.float32, device=device)
+    coords[render_n, indices] = rc
+
+    density = torch.zeros(batch_size, n_coords, dtype=torch.float32, device=device)
+    density[render_n, indices] = images[nonzero_mask]
+
+    return {
+        'nonzero_coords': n_nonzero_coords,
+        'coords': coords.to(device),
+        'density': density.to(device)
+    }
 
 
 def wrap_lines_into_numpy_batch(lines):
