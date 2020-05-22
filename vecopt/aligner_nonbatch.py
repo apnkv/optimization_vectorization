@@ -1,14 +1,12 @@
-from typing import Callable, List, Any
+from typing import Callable, List, Any, Optional
 
 import numpy as np
 import torch
 from geomloss import SamplesLoss
-from torch import optim
 
+from vecopt.aligner import make_default_optimize_fn, init_ot_aligner
 from vecopt.contrib.differentiable_rendering.sigmoids_renderer.renderer import Renderer
 from vecopt.data_utils import get_pixel_coords_and_density
-
-DEFAULT_DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 class StatefulAligner:
@@ -21,11 +19,11 @@ class StatefulAligner:
                  line_batch: torch.Tensor,
                  image: np.ndarray,
                  init_callback: Callable[[dict], None] = None,
-                 device: str = DEFAULT_DEVICE):
+                 device: Optional[str] = None):
 
         self.prestep_callbacks = []
         self.callbacks = []
-        self.device = device
+        self.device = device or 'cuda' if torch.cuda.is_available() else 'cpu'
         self.step_function = lambda x: x
 
         raster_coords, raster_masses = get_pixel_coords_and_density(image, device)
@@ -76,31 +74,6 @@ class StatefulAligner:
         self.callbacks.append(fn)
 
 
-class LossComposition:
-    def __init__(self):
-        self.loss_fns = []
-
-    def add(self, fn):
-        self.loss_fns.append(fn)
-
-    def __call__(self, state):
-        assert len(self.loss_fns) > 0
-
-        value = self.loss_fns[0](state)
-        for loss_fn in self.loss_fns[1:]:
-            value += loss_fn(state)
-
-        return value
-
-
-def store_render_difference(state):
-    state['difference'] = torch.abs(state['render'] - state['raster'])
-
-
-def store_grads(state):
-    state['grads'] = state['current_line_batch'].grad.clone().detach().cpu().numpy()
-
-
 def save_best_batch(state):
     if 'min_loss' not in state or state['loss_value'].item() < state['min_loss']:
         state['min_loss'] = state['loss_value'].item()
@@ -126,54 +99,8 @@ def make_default_loss_fn(ot_schedule=None, bce_schedule=None, ot_loss=None):
     return compute_loss
 
 
-def strip_confidence_grads(state):
-    if state['current_line_batch'].grad is not None:
-        state['current_line_batch'].grad.data[:, :, -1] = 0.
-
-
-def store_transport_plan(ot_loss):
-    def fn(state):
-        if state['current_step'] == 0:
-            return
-
-        ot_loss.potentials = True
-
-        vector_masses = state['vector_masses']
-        vector_coords = state['vector_coords']
-        raster_masses = state['raster_masses']
-        raster_coords = state['raster_coords']
-
-        N, M, D = vector_coords.shape[0], raster_coords.shape[0], vector_coords.shape[1]
-
-        dual_f, dual_g = ot_loss(vector_masses, vector_coords, raster_masses, raster_coords)
-
-        a_i, x_i = vector_masses.view(N, 1), vector_coords.view(N, 1, D)
-        b_j, y_j = raster_masses.view(1, M), raster_coords.view(1, M, D)
-        F_i, G_j = dual_f.view(N, 1), dual_g.view(1, M)
-
-        C_ij = (1 / ot_loss.p) * ((x_i - y_j) ** ot_loss.p).sum(-1)  # (N,M) cost matrix
-        eps = ot_loss.blur ** ot_loss.p  # temperature epsilon
-        P_ij = ((F_i + G_j - C_ij) / eps).exp() * (a_i * b_j)  # (N,M) transport plan
-
-        state['transport_plan'] = P_ij
-
-    return fn
-
-
-def make_default_optimize_fn(aligner, lr=0.5, transform_grads=None, base_optimizer=optim.Adam):
-    optimizer = base_optimizer((aligner.get_line_batch(),), lr=lr)
-    transform_grads = transform_grads or strip_confidence_grads
-
-    def optimize_fn(state):
-        optimizer.zero_grad()
-        state['loss_value'].backward()
-        transform_grads(state)
-        optimizer.step()
-
-    return optimize_fn
-
-
-def make_default_step_fn(loss_fn, optimize_fn, device=DEFAULT_DEVICE):
+def make_default_step_fn(loss_fn, optimize_fn, device=None):
+    device = device or 'cuda' if torch.cuda.is_available() else 'cpu'
     renderer = Renderer((64, 64), linecaps='butt', device=device, dtype=torch.float32)
 
     def step_fn(state):
@@ -199,21 +126,3 @@ def make_default_step_fn(loss_fn, optimize_fn, device=DEFAULT_DEVICE):
         return state['current_line_batch']
 
     return step_fn
-
-
-def init_ot_aligner(aligner: StatefulAligner,
-                    loss_fn: Callable[[dict], torch.Tensor] = None,
-                    optimize_fn: Callable[[dict], None] = None,
-                    callbacks: List[Callable] = None,
-                    device: str = DEFAULT_DEVICE) -> StatefulAligner:
-    loss_fn = loss_fn or make_default_loss_fn()
-    optimize_fn = optimize_fn or make_default_optimize_fn(aligner)
-    step_fn = make_default_step_fn(loss_fn, optimize_fn, device)
-
-    callbacks = callbacks or []
-
-    aligner.set_step_function(step_fn)
-    for callback in callbacks:
-        aligner.add_callback(callback)
-
-    return aligner

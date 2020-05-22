@@ -1,4 +1,4 @@
-from typing import Callable, List, Any
+from typing import Callable, List, Any, Optional
 
 import torch
 from geomloss import SamplesLoss
@@ -7,8 +7,6 @@ from torch import optim
 from vecopt.aligner_utils import strip_confidence_grads
 from vecopt.contrib.differentiable_rendering.sigmoids_renderer.renderer import Renderer
 from vecopt.data_utils import get_pixel_coords_and_density_batch
-
-DEFAULT_DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 class StatefulBatchAligner:
@@ -21,11 +19,11 @@ class StatefulBatchAligner:
                  lines_batch: torch.Tensor,
                  images_batch: torch.Tensor,
                  init_callback: Callable[[dict], None] = None,
-                 device: str = DEFAULT_DEVICE):
+                 device: Optional[str] = None):
 
         self.prestep_callbacks = []
         self.callbacks = []
-        self.device = device
+        self.device = device or 'cuda' if torch.cuda.is_available() else 'cpu'
         self.step_function = lambda x: x
 
         raster_ot = get_pixel_coords_and_density_batch(images_batch)
@@ -121,7 +119,8 @@ def make_default_optimize_fn(aligner, lr=0.5, transform_grads=None, base_optimiz
     return optimize_fn
 
 
-def make_default_step_fn(loss_fn, optimize_fn, device=DEFAULT_DEVICE):
+def make_default_step_fn(loss_fn, optimize_fn, device=None):
+    device = device or 'cuda' if torch.cuda.is_available() else 'cpu'
     renderer = Renderer((64, 64), linecaps='butt', device=device, dtype=torch.float32)
 
     def step_fn(state):
@@ -148,11 +147,12 @@ def make_default_step_fn(loss_fn, optimize_fn, device=DEFAULT_DEVICE):
     return step_fn
 
 
-def init_ot_aligner(aligner: StatefulBatchAligner,
+def init_ot_aligner(aligner,
                     loss_fn: Callable[[dict], torch.Tensor] = None,
                     optimize_fn: Callable[[dict], None] = None,
                     callbacks: List[Callable] = None,
-                    device: str = DEFAULT_DEVICE) -> StatefulBatchAligner:
+                    device: Optional[str] = None):
+    device = device or 'cuda' if torch.cuda.is_available() else 'cpu'
     loss_fn = loss_fn or make_default_loss_fn()
     optimize_fn = optimize_fn or make_default_optimize_fn(aligner)
     step_fn = make_default_step_fn(loss_fn, optimize_fn, device)
