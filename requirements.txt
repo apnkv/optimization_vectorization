@@ -1,0 +1,5 @@
+numpy>=1.18.1
+git+https://github.com/RaghuSpaceRajan/geomloss
+torch>=1.4.0
+Pillow>=7.0.0
+git+https://github.com/voyleg/dev.vectorization@599b71fe4a954351dfc61ad399b4f091bc2ea974

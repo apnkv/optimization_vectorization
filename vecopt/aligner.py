@@ -4,9 +4,9 @@ import torch
 from geomloss import SamplesLoss
 from torch import optim
 
+from vecopt.aligner_utils import strip_confidence_grads
 from vecopt.contrib.differentiable_rendering.sigmoids_renderer.renderer import Renderer
 from vecopt.data_utils import get_pixel_coords_and_density_batch
-from vecopt.aligner_utils import strip_confidence_grads
 
 DEFAULT_DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 

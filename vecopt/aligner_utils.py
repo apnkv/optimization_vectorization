@@ -7,7 +7,6 @@ def strip_confidence_grads(state):
 
 
 def store_transport_plan(ot_loss, idx):
-
     def fn(state):
         if state['current_step'] == 0:
             return

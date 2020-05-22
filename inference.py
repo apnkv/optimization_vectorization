@@ -1,7 +1,5 @@
 import torch
 
-from . import stateful_batch_aligner as sba
-
 
 def strip_confidence_grads(state):
     if state['current_line_batch'].grad is not None:

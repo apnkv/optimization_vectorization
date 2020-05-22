@@ -4,8 +4,8 @@ import tempfile
 
 import PIL
 import cairo
-import torch
 import numpy as np
+import torch
 from PIL import Image, ImageOps
 
 
@@ -153,9 +153,8 @@ class LineBatchRandomShift(LinePerturbation):
         new_lines[:, :, :4][nondummy_mask] += torch.randint(*self._endpoint_shift_range, endpoints.shape)
 
         width = new_lines[:, :, 4][nondummy_mask]
-        new_lines[:, :, 4][nondummy_mask] = torch.clamp_min(width + torch.randint(*self._width_shift_range, width.shape), 1.)
-        # new_lines[:, :, :4] += torch.randint(*self._endpoint_shift_range, [new_lines.shape[0], new_lines.shape[1], 4])
-        # new_lines[:, :, 4] = torch.clamp_min(new_lines[:, :, 4] + torch.randint(*self._width_shift_range, [new_lines.shape[0], new_lines.shape[1]]), 1.)
+        new_lines[:, :, 4][nondummy_mask] = torch.clamp_min(
+            width + torch.randint(*self._width_shift_range, width.shape), 1.)
         return new_lines
 
 
@@ -190,7 +189,7 @@ class LinePerturbationPipe(LinePerturbation):
             new_lines = step.transform(new_lines)
         return new_lines
 
-    
+
 def compute_pixel_coords(image):
     return np.argwhere(image)
 
