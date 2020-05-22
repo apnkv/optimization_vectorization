@@ -253,3 +253,13 @@ def wrap_lines_into_numpy_batch(lines):
 
 def torch_to_synthetic_lines(patch_lines):
     return patch_lines.numpy()[:, :5]
+
+
+def qbezier_to_cbezier(qbezier):
+    p0 = qbezier[..., :2]
+    qp1 = qbezier[..., 2:4]
+    qp2 = qbezier[..., 4:6]
+    rest = qbezier[..., 6:]
+    p1 = (qp1 * 2 + p0) / 3
+    p2 = (qp1 * 2 + qp2) / 3
+    return torch.cat([p0, p1, p2, qp2, rest], axis=-1)

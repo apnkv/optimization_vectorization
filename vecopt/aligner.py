@@ -15,20 +15,23 @@ class StatefulBatchAligner:
     device: str
     step_function: Callable[[dict], Any]
 
-    def __init__(self,
-                 lines_batch: torch.Tensor,
-                 images_batch: torch.Tensor,
-                 init_callback: Callable[[dict], None] = None,
-                 device: Optional[str] = None):
+    ESSENTIAL_STATE_KEYS = ['raster', 'raster_coords', 'raster_masses', 'initial_line_batch', 'current_line_batch',
+                            'loss_value', 'current_step', 'create_optimizer']
+
+    def __init__(self, device: Optional[str] = None):
 
         self.prestep_callbacks = []
         self.callbacks = []
         self.device = device or 'cuda' if torch.cuda.is_available() else 'cpu'
         self.step_function = lambda x: x
 
+        self.state = dict()
+
+    def load_batches(self, lines_batch: torch.Tensor, images_batch: torch.Tensor,
+                     callback: Optional[Callable[[dict], Any]] = None):
         raster_ot = get_pixel_coords_and_density_batch(images_batch)
         raster_coords, raster_masses = raster_ot['coords'], raster_ot['density']
-        self.state = {
+        self.state.update({
             'raster': images_batch,
             'raster_coords': raster_coords,
             'raster_masses': raster_masses,
@@ -38,19 +41,20 @@ class StatefulBatchAligner:
 
             'loss_value': None,
             'current_step': -1
-        }
+        })
         self.state['initial_line_batch'].requires_grad_(False)
         self.state['current_line_batch'].requires_grad_()
 
-        self._necessary_state_keys = set(self.state.keys())
+        if self.state.get('create_optimizer', None) is not None:
+            self.state['create_optimizer']([self.get_line_batch()])
 
-        if init_callback is not None:
-            init_callback(self.state)
+        if callback is not None:
+            callback(self.state)
 
     def clear_custom_state(self):
         current_keys = list(self.state.keys())
         for key in current_keys:
-            if key not in self._necessary_state_keys:
+            if key not in self.ESSENTIAL_STATE_KEYS:
                 del self.state[key]
 
     def get_line_batch(self) -> torch.Tensor:
@@ -107,14 +111,17 @@ def make_default_loss_fn(ot_schedule=None, bce_schedule=None, ot_loss=None):
 
 
 def make_default_optimize_fn(aligner, lr=0.5, transform_grads=None, base_optimizer=optim.Adam):
-    optimizer = base_optimizer((aligner.get_line_batch(),), lr=lr)
+    def create_optimizer(params):
+        aligner.state['optimizer'] = base_optimizer(params, lr=lr)
+
+    aligner.state['create_optimizer'] = create_optimizer
     transform_grads = transform_grads or strip_confidence_grads
 
     def optimize_fn(state):
-        optimizer.zero_grad()
+        state['optimizer'].zero_grad()
         state['loss_value'].backward()
         transform_grads(state)
-        optimizer.step()
+        state['optimizer'].step()
 
     return optimize_fn
 
