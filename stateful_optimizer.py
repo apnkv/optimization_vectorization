@@ -128,7 +128,7 @@ def make_default_loss_fn(ot_schedule=None, bce_schedule=None, ot_loss=None):
 
 def strip_confidence_grads(state):
     if state['current_line_batch'].grad is not None:
-        state['current_line_batch'].grad.data[:, :, 5] = 0.
+        state['current_line_batch'].grad.data[:, :, -1] = 0.
 
 
 def store_transport_plan(ot_loss):
