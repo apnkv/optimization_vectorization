@@ -34,6 +34,7 @@ class IntermediateOutputAligner:
 
         self.infer_crossings = infer_crossings
         self.crossing_model = crossing_model or CrossingRefinerFull().to(self.device) if infer_crossings else None
+        self.verbose = True
 
     def __call__(self, sample):
         n_params = sample['patches_vector'].shape[-1]
@@ -67,7 +68,7 @@ class IntermediateOutputAligner:
             self.aligner.clear_custom_state()
             self.aligner.load_batches(vector, raster)
 
-            for _ in tqdm(range(self.n_steps)):
+            for _ in range(self.n_steps):
                 self.aligner.step()
 
             all_vectors[batch_start:batch_start + self.batch_size] = \

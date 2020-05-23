@@ -31,7 +31,7 @@ class StatefulBatchAligner:
                      callback: Optional[Callable[[dict], Any]] = None):
         raster_ot = get_pixel_coords_and_density_batch(images_batch)
         raster_coords, raster_masses = raster_ot['coords'], raster_ot['density']
-        self.state.update({
+        state_update = {
             'raster': images_batch,
             'raster_coords': raster_coords,
             'raster_masses': raster_masses,
@@ -41,7 +41,11 @@ class StatefulBatchAligner:
 
             'loss_value': None,
             'current_step': -1
-        })
+        }
+        for key in state_update.keys():
+            if key in self.state:
+                del self.state[key]
+        self.state.update(state_update)
         self.state['initial_line_batch'].requires_grad_(False)
         self.state['current_line_batch'].requires_grad_()
 
