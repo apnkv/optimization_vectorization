@@ -1,5 +1,4 @@
 import torch
-from tqdm import tqdm
 
 from vecopt.aligner import StatefulBatchAligner
 from vecopt.contrib.differentiable_rendering.sigmoids_renderer.renderer import Renderer
@@ -23,8 +22,7 @@ class IntermediateOutputAligner:
                  n_steps=500,
                  renderer=None,
                  crossing_model=None,
-                 infer_crossings=True,
-                 verbose=True):
+                 infer_crossings=True):
 
         self.aligner = aligner
         self.batch_size = batch_size
