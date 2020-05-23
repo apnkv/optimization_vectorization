@@ -6,9 +6,9 @@ import pickle
 from collections import deque, namedtuple
 from concurrent.futures import ThreadPoolExecutor, wait
 
-from vecopt.inference import make_intermediate_output_aligner
+from vecopt.inference.inference import make_intermediate_output_aligner, load_intermediate_result
 
-IntermediateSample = namedtuple('IntermediateSample', ['worker_idx', 'sample', 'filename'])
+IntermediateSample = namedtuple('IntermediateSample', ['sample', 'filename'])
 AlignedSample = namedtuple('AlignedSample', ['sample', 'filename'])
 
 
@@ -38,14 +38,10 @@ def align_data_folder(path, n_workers, config):
     # TODO: decouple loading from folder from making IntermediateSample's and aligning
     data = deque()
 
-    worker_idx = -1
     for filename in glob.glob(os.path.join(path, '*')):
         path = os.path.join(path, filename)
-        with open(path, 'rb') as handle:
-            sample = pickle.load(handle)
-
-        worker_idx = (worker_idx + 1) % n_workers
-        data.append(IntermediateSample(worker_idx, sample, filename))
+        sample = load_intermediate_result(path)
+        data.append(IntermediateSample(sample, filename))
 
     workers = [Worker(data, gpu_idx, config) for gpu_idx in range(n_workers)]
     executor = ThreadPoolExecutor(max_workers=n_workers)
@@ -66,7 +62,7 @@ def main(args):
     with open(args.config) as config_file:
         config = json.load(config_file)
 
-    print(f'Will align with {args.n_workers} using config:')
+    print(f'Will align with {args.n_workers} workers using config:')
     print(config)
 
     results = align_data_folder(args.input, args.n_workers, config)
@@ -78,7 +74,7 @@ def main(args):
         filename = os.path.join(args.output, sample.filename)
         print(filename)
         with open(filename, 'wb') as file:
-            pickle.dump(sample, file, pickle.HIGHEST_PROTOCOL)
+            pickle.dump(sample.sample, file, pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == '__main__':

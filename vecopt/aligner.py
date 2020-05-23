@@ -83,12 +83,6 @@ class StatefulBatchAligner:
         self.callbacks.append(fn)
 
 
-# def save_best_batch(state):
-#     if 'min_loss' not in state or state['loss_value'].item() < state['min_loss']:
-#         state['min_loss'] = state['loss_value'].item()
-#         state['best_batch'] = state['current_line_batch'].clone().detach()
-
-
 def make_default_loss_fn(ot_schedule=None, bce_schedule=None, ot_loss=None):
     ot_loss = ot_loss or SamplesLoss("sinkhorn", p=2, blur=.05, scaling=.6, reach=6.)
     bce_loss = torch.nn.BCEWithLogitsLoss(reduction='none')

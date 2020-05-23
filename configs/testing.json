@@ -11,7 +11,7 @@
     4
   ],
   "lr": 0.25,
-  "n_steps": 500,
+  "n_steps": 5,
   "coord_only_grads": 350,
   "batch_size": 64,
   "infer_crossings": true

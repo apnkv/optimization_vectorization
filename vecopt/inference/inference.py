@@ -1,4 +1,5 @@
 import torch
+import pickle
 from geomloss import SamplesLoss
 from torch import optim
 
@@ -95,7 +96,7 @@ def load_crossing_model(path, device):
     return crossing_model
 
 
-def make_aligner(device, config, crossing_model=None):
+def make_parameterized_aligner(device, config, crossing_model=None):
     if crossing_model is None:
         crossing_model = load_crossing_model(config['crossing_model_weights'], device)
 
@@ -125,10 +126,16 @@ def make_aligner(device, config, crossing_model=None):
 
 def make_intermediate_output_aligner(device, config):
     crossing_model = load_crossing_model(config['crossing_model_weights'], device)
-    aligner = make_aligner(device, config, crossing_model=crossing_model)
+    aligner = make_parameterized_aligner(device, config, crossing_model=crossing_model)
     return IntermediateOutputAligner(aligner,
                                      batch_size=config['batch_size'],
                                      n_steps=config['n_steps'],
                                      crossing_model=crossing_model,
                                      infer_crossings=config['infer_crossings']
                                      )
+
+
+def load_intermediate_result(path):
+    with open(path, 'rb') as handle:
+        sample = pickle.load(handle)
+    return sample
