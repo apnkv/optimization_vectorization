@@ -38,7 +38,7 @@ def align_data_folder(path, n_workers, config):
     # TODO: decouple loading from folder from making IntermediateSample's and aligning
     data = deque()
 
-    for filename in glob.glob(os.path.join(path, '*')):
+    for filename in glob.glob(os.path.join(path, '*.pickle')):
         path = os.path.join(path, filename)
         sample = load_intermediate_result(path)
         data.append(IntermediateSample(sample, filename))
@@ -75,6 +75,9 @@ def main(args):
         print(filename)
         with open(filename, 'wb') as file:
             pickle.dump(sample.sample, file, pickle.HIGHEST_PROTOCOL)
+
+    with open(os.path.join(args.output, 'config.json'), 'w') as config_file:
+        config_file.write(json.dumps(config))
 
 
 if __name__ == '__main__':

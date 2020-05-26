@@ -25,7 +25,7 @@ def main(args):
     if os.path.isfile(args.input):
         filenames = [args.input]
     else:
-        filenames = glob.glob(os.path.join(args.input, '*'))
+        filenames = glob.glob(os.path.join(args.input, '*.pickle'))
 
     samples = []
     for filename in filenames:
