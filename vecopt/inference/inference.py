@@ -11,7 +11,7 @@ from vecopt.aligner import (
 )
 from vecopt.aligner_utils import (
     LossComposition, perceptual_bce, strip_confidence_grads,
-    compose, coords_only_grads
+    compose, coords_only_grads, save_best_batch, not_too_thin
 )
 from vecopt.contrib.differentiable_rendering.sigmoids_renderer.renderer import Renderer
 from vecopt.crossing_model import CrossingRefinerFull
@@ -34,7 +34,8 @@ class IntermediateOutputAligner:
                  n_steps=500,
                  renderer=None,
                  crossing_model=None,
-                 infer_crossings=True):
+                 infer_crossings=True,
+                 use_best_batch=False):
 
         self.aligner = aligner
         self.batch_size = batch_size
@@ -45,6 +46,7 @@ class IntermediateOutputAligner:
         self.infer_crossings = infer_crossings
         self.crossing_model = crossing_model or CrossingRefinerFull().to(self.device) if infer_crossings else None
         self.verbose = True
+        self.use_best_batch = use_best_batch
 
     def __call__(self, sample):
         n_params = sample['patches_vector'].shape[-1]
@@ -74,6 +76,7 @@ class IntermediateOutputAligner:
             vector[:, :, -1] = 0.5
 
             vector = zero_primitives_outside_of_render(vector, self.renderer)
+            # TODO: random inits should go here
 
             self.aligner.clear_custom_state()
             self.aligner.load_batches(vector, raster)
@@ -81,8 +84,12 @@ class IntermediateOutputAligner:
             for _ in range(self.n_steps):
                 self.aligner.step()
 
-            all_vectors[batch_start:batch_start + self.batch_size] = \
-                self.aligner.state['current_line_batch'].clone().detach().cpu()
+            if not self.use_best_batch:
+                all_vectors[batch_start:batch_start + self.batch_size] = \
+                    self.aligner.state['current_line_batch'].clone().detach().cpu()
+            else:
+                all_vectors[batch_start:batch_start + self.batch_size] = \
+                    self.aligner.state['best_line_batch'].clone().detach().cpu()
 
             patches_vector[nonempty_patches] = all_vectors
 
@@ -103,12 +110,26 @@ def make_parameterized_aligner(device, config, crossing_model=None):
     loss = LossComposition()
     ot_loss = SamplesLoss("sinkhorn", **config['ot_loss'])
     loss.add(make_default_loss_fn(
-        bce_schedule=(lambda state: 0.0),
+        bce_schedule=(lambda state: 1.0) if config.get('bce_loss_enabled', False) else (lambda state: 0.0),
+        ot_schedule=(lambda state: 1.0) if config.get('ot_loss_enabled', True) else (lambda state: 0.0),
         ot_loss=ot_loss
     ))
     if 'perceptual_bce' in config:
         for layer in config['perceptual_bce']:
-            loss.add(perceptual_bce(crossing_model, layer))
+            loss_component = perceptual_bce(crossing_model, layer)
+            if 'perceptual_bce_from_step' not in config:
+                loss.add(loss_component)
+            else:
+                def perceptual_loss(state):
+                    step = state['current_step']
+                    if step >= config['perceptual_bce_from_step']:
+                        return loss_component(state)
+                    else:
+                        return torch.scalar_tensor(0.0)
+                loss.add(perceptual_loss)
+
+    if not config.get('ot_loss_enabled', True):
+        loss.add(not_too_thin)
 
     grad_transformer = compose(strip_confidence_grads, coords_only_grads(config['coord_only_grads']))
 
@@ -121,6 +142,9 @@ def make_parameterized_aligner(device, config, crossing_model=None):
                         base_optimizer=optim.Adam,
                     ))
 
+    if config.get('use_best_batch', False):
+        aligner.add_callback(save_best_batch)
+
     return aligner
 
 
@@ -131,7 +155,8 @@ def make_intermediate_output_aligner(device, config):
                                      batch_size=config['batch_size'],
                                      n_steps=config['n_steps'],
                                      crossing_model=crossing_model,
-                                     infer_crossings=config['infer_crossings']
+                                     infer_crossings=config['infer_crossings'],
+                                     use_best_batch=config.get('use_best_batch', False)
                                      )
 
 

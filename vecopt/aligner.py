@@ -96,10 +96,14 @@ def make_default_loss_fn(ot_schedule=None, bce_schedule=None, ot_loss=None):
         raster_masses = state['raster_masses']
         raster_coords = state['raster_coords']
 
-        bce_per_sample = bce_loss(state['render'], state['raster']).mean(dim=(1, 2))
-        ot_loss_per_sample = ot_loss(vector_masses, vector_coords, raster_masses, raster_coords)
+        bce_coef = bce_schedule(state)
+        ot_coef = ot_schedule(state)
 
-        total_loss_per_sample = bce_schedule(state) * bce_per_sample + ot_schedule(state) * ot_loss_per_sample
+        bce_per_sample = bce_loss(state['render'], state['raster']).mean(dim=(1, 2)) if bce_coef != 0. else 0.
+        ot_loss_per_sample = ot_loss(vector_masses, vector_coords, raster_masses,
+                                     raster_coords) if ot_coef != 0. else 0.
+
+        total_loss_per_sample = bce_coef * bce_per_sample + ot_coef * ot_loss_per_sample
 
         state['loss_per_sample'] = total_loss_per_sample
 

@@ -1,0 +1,16 @@
+{
+  "crossing_model_weights": "../vecopt/weights/best_crossings_mult.pt",
+  "ot_loss": {
+    "p": 2,
+    "blur": 0.01,
+    "scaling": 0.5,
+    "reach": 5.0
+  },
+  "ot_loss_enabled": false,
+  "bce_loss_enabled": true,
+  "lr": 0.25,
+  "n_steps": 500,
+  "coord_only_grads": 350,
+  "batch_size": 64,
+  "infer_crossings": true
+}

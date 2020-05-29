@@ -108,3 +108,16 @@ def accumulate_renders(idx=0):
         state['renders'].append(state['render'][idx].detach().cpu().numpy())
 
     return fn
+
+
+def save_best_batch(state):
+    if 'best_line_batch' not in state:
+        state['best_line_batch'] = state['current_line_batch'].clone().detach()
+        state['best_loss_per_sample'] = state['loss_per_sample'].clone().detach()
+        return
+
+    replace_mask = state['loss_per_sample'] < state['best_loss_per_sample']
+    state['best_line_batch'][replace_mask] = state['current_line_batch'][replace_mask].clone().detach()
+    state['best_loss_per_sample'][replace_mask] = state['loss_per_sample'][replace_mask].clone().detach()
+
+    # print(replace_mask)
